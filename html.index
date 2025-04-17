@@ -35,8 +35,16 @@
                 <h1>Binga Fish & Tourism</h1>
             </section>
             <section class="content">
-                <div id="app-content">
+                <div id="app-content" class="container">
                     <p>Welcome to the Binga Fish & Tourism App!</p>
+                    <p>This application provides features for:</p>
+                    <ul>
+                        <li>User Registration and Login</li>
+                        <li>Viewing Fish Listings</li>
+                        <li>Uploading New Fish</li>
+                        <li>Exploring Tourism Spots</li>
+                        <li>Interactive Map View</li>
+                    </ul>
                     <p>To access the Shiny application, visit the link below:</p>
                     <a href="https://your-shiny-app-url" class="btn btn-primary">Open Shiny App</a>
                 </div>
