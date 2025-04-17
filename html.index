@@ -1,347 +1,47 @@
-library(shiny)
-library(shinydashboard)
-library(DBI)
-library(RSQLite)
-library(leaflet)
-library(DT)
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Binga Fish & Tourism</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.0.5/dist/css/adminlte.min.css">
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/admin-lte@3.0.5/dist/js/adminlte.min.js"></script>
+</head>
+<body class="hold-transition sidebar-mini">
+    <div class="wrapper">
+        <header class="main-header">
+            <a href="#" class="logo">
+                <span class="logo-lg">Binga Fish & Tourism</span>
+            </a>
+        </header>
+        <aside class="main-sidebar">
+            <section class="sidebar">
+                <ul class="sidebar-menu" data-widget="tree">
+                    <li><a href="#dashboard">Dashboard</a></li>
+                    <li><a href="#auth">Register/Login</a></li>
+                    <li><a href="#user_info">User Information</a></li>
+                    <li><a href="#fish_market">Fish Marketplace</a></li>
+                    <li><a href="#tourism">Tourism Spots</a></li>
+                    <li><a href="#map">Map View</a></li>
+                </ul>
+            </section>
+        </aside>
 
-# Create or connect to SQLite database
-db <- dbConnect(RSQLite::SQLite(), "binga_fish_market.db")
-
-# Create tables if they don't exist
-dbExecute(db, "
-CREATE TABLE IF NOT EXISTS Users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  username TEXT NOT NULL UNIQUE,
-  password TEXT NOT NULL,
-  phone TEXT,
-  is_fisherman INTEGER DEFAULT 0,
-  registration_date DATETIME DEFAULT CURRENT_TIMESTAMP
-)")
-
-dbExecute(db, "
-CREATE TABLE IF NOT EXISTS Fish (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER,
-  image_url TEXT,
-  fish_type TEXT,
-  weight_kg REAL,
-  price_usd REAL,
-  preservation TEXT,
-  location TEXT DEFAULT 'Binga',
-  upload_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY(user_id) REFERENCES Users(id)
-)")
-
-dbExecute(db, "
-CREATE TABLE IF NOT EXISTS Tourism (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT,
-  description TEXT,
-  image_url TEXT,
-  latitude REAL,
-  longitude REAL,
-  category TEXT
-)")
-
-# Insert tourism data if empty
-if (dbGetQuery(db, "SELECT COUNT(*) as count FROM Tourism")$count == 0) {
-  tourism_spots <- data.frame(
-    name = c("Binga Crocodile Camp", "Binga Hot Springs", "Binga Beach", "Lake Kariba Shore", 
-             "Binga Beach Activities", "Binga Beach Scenic"),
-    description = c(
-      "Experience crocodile farming and wildlife viewing",
-      "Natural hot springs with therapeutic properties",
-      "Beautiful sandy beach on Lake Kariba",
-      "Stunning views and fishing spots along the lake",
-      "Enjoy activities such as swimming and beach games at Binga Beach.",
-      "Scenic views of the clear waters and sandy shores of Binga Beach."
-    ),
-    image_url = c(
-      "crocodile_camp.jpg",
-      "hot_springs.jpg",
-      "binga_beach.jpg",
-      "kariba_shore.jpg",
-      "binga_beach_activities.jpg",  # New image for activities
-      "binga_beach_scenic.jpg"        # New image for scenic views
-    ),
-    latitude = c(-17.589, -17.602, -17.615, -17.595, -17.615, -17.615),
-    longitude = c(27.338, 27.352, 27.365, 27.342, 27.365, 27.365),
-    category = c("wildlife", "nature", "beach", "lake", "beach", "beach")
-  )
-  
-  dbWriteTable(db, "Tourism", tourism_spots, append = TRUE)
-}
-
-# UI
-ui <- dashboardPage(
-  dashboardHeader(title = "Binga Fish & Tourism"),
-  dashboardSidebar(
-    sidebarMenu(
-      menuItem("Dashboard", tabName = "dashboard", icon = icon("home")),
-      menuItem("Register/Login", tabName = "auth", icon = icon("user")),
-      menuItem("Fish Marketplace", tabName = "fish_market", icon = icon("fish")),
-      menuItem("Tourism Spots", tabName = "tourism", icon = icon("umbrella-beach")),
-      menuItem("Map View", tabName = "map", icon = icon("map"))
-    )
-  ),
-  dashboardBody(
-    tabItems(
-      tabItem(tabName = "dashboard",
-              fluidRow(
-                valueBoxOutput("total_fishermen"),
-                valueBoxOutput("total_fish_listings"),
-                valueBoxOutput("tourism_spots")
-              ),
-              fluidRow(
-                box(width = 12, title = "Recent Fish Listings",
-                    DTOutput("recent_fish"))
-              )
-      ),
-      tabItem(tabName = "auth",
-              tabsetPanel(
-                tabPanel("Register",
-                         box(width = 6, title = "New User Registration", status = "primary",
-                             textInput("reg_username", "Username"),
-                             passwordInput("reg_password", "Password"),
-                             textInput("reg_phone", "Phone Number"),
-                             checkboxInput("is_fisherman", "I am a fisherman"),
-                             actionButton("register_btn", "Register", class = "btn-primary")
-                         )
-                ),
-                tabPanel("Login",
-                         box(width = 6, title = "Login", status = "primary",
-                             textInput("login_username", "Username"),
-                             passwordInput("login_password", "Password"),
-                             actionButton("login_btn", "Login", class = "btn-primary")
-                         )
-                )
-              )
-      ),
-      tabItem(tabName = "fish_market",
-              tabsetPanel(
-                tabPanel("Upload Catch",
-                         box(width = 6, title = "New Fish Listing", status = "primary",
-                             fileInput("fish_image", "Fish Photo", accept = c("image/*")),
-                             selectInput("fish_type", "Fish Type", 
-                                         choices = c("Bream", "Tigerfish", "Catfish", "Cornish Jack", "Other")),
-                             numericInput("weight", "Weight (kg)", value = 1, min = 0.1),
-                             numericInput("price", "Price (USD)", value = 5, min = 1),
-                             selectInput("preservation", "Preservation Method",
-                                         choices = c("Fresh", "Smoked", "Salted", "Frozen")),
-                             actionButton("upload_fish", "List Fish", class = "btn-primary")
-                         )
-                ),
-                tabPanel("Browse Listings",
-                         box(width = 12, title = "Available Fish", status = "primary",
-                             DTOutput("fish_listings"),
-                             uiOutput("whatsapp_btn")
-                         )
-                )
-              )
-      ),
-      tabItem(tabName = "tourism",
-              fluidRow(
-                box(width = 12, title = "Binga Tourism Attractions", status = "primary",
-                    uiOutput("tourism_gallery")
-                )
-              )
-      ),
-      tabItem(tabName = "map",
-              box(width = 12, title = "Binga Map", status = "primary",
-                  leafletOutput("binga_map", height = 600)
-              )
-      )
-    )
-  )
-)
-
-# Server
-server <- function(input, output, session) {
-  
-  user <- reactiveValues(logged_in = FALSE, username = NULL, is_fisherman = FALSE)
-  
-  observeEvent(input$register_btn, {
-    if (input$reg_username == "" || input$reg_password == "") {
-      showNotification("Username and password are required!", type = "error")
-      return()
-    }
-    
-    tryCatch({
-      dbExecute(db, 
-                "INSERT INTO Users (username, password, phone, is_fisherman) VALUES (?, ?, ?, ?)",
-                params = list(input$reg_username, 
-                              input$reg_password,
-                              input$reg_phone,
-                              as.integer(input$is_fisherman)))
-      
-      showNotification("Registration successful! Please login.", type = "message")
-    }, error = function(e) {
-      showNotification("Username already exists!", type = "error")
-    })
-  })
-  
-  observeEvent(input$login_btn, {
-    user_data <- dbGetQuery(db, 
-                            "SELECT * FROM Users WHERE username = ? AND password = ?",
-                            params = list(input$login_username, input$login_password))
-    
-    if (nrow(user_data) > 0) {
-      user$logged_in <- TRUE
-      user$username <- input$login_username
-      user$is_fisherman <- as.logical(user_data$is_fisherman[1])
-      showNotification(paste("Welcome,", user$username), type = "message")
-    } else {
-      showNotification("Invalid credentials!", type = "error")
-    }
-  })
-  
-  observeEvent(input$upload_fish, {
-    if (!user$logged_in) {
-      showNotification("Please login first!", type = "error")
-      return()
-    }
-    
-    if (is.null(input$fish_image)) {
-      showNotification("Please select an image!", type = "error")
-      return()
-    }
-    
-    # Save image to www folder
-    image_path <- file.path("www", input$fish_image$name)
-    file.copy(input$fish_image$datapath, image_path)
-    
-    # Get user ID
-    user_id <- dbGetQuery(db, "SELECT id FROM Users WHERE username = ?", 
-                          params = list(user$username))$id
-    
-    # Insert fish data
-    dbExecute(db,
-              "INSERT INTO Fish (user_id, image_url, fish_type, weight_kg, price_usd, preservation) 
-              VALUES (?, ?, ?, ?, ?, ?)",
-              params = list(user_id, 
-                            input$fish_image$name,
-                            input$fish_type,
-                            input$weight,
-                            input$price,
-                            input$preservation))
-    
-    showNotification("Fish listing added successfully!", type = "message")
-  })
-  
-  output$fish_listings <- renderDT({
-    fish_data <- dbGetQuery(db, "
-      SELECT f.id, f.fish_type, f.weight_kg, f.price_usd, f.preservation, u.username, u.phone, f.image_url 
-      FROM Fish f
-      JOIN Users u ON f.user_id = u.id
-      ORDER BY f.upload_time DESC
-    ")
-    
-    fish_data$image_url <- paste0("<img src='www/", fish_data$image_url, "' width='100'>")
-    
-    datatable(fish_data, options = list(pageLength = 5), escape = FALSE)
-  })
-  
-  output$whatsapp_btn <- renderUI({
-    if (!is.null(input$fish_listings_rows_selected)) {
-      fish_data <- dbGetQuery(db, "
-        SELECT u.phone FROM Fish f
-        JOIN Users u ON f.user_id = u.id
-        WHERE f.id = ?
-      ", params = list(input$fish_listings_rows_selected))
-      
-      if (nrow(fish_data) > 0 && !is.na(fish_data$phone[1])) {
-        whatsapp_url <- paste0("https://wa.me/", fish_data$phone[1])
-        actionButton("contact_btn", "Contact Seller via WhatsApp", 
-                     onclick = paste0("window.open('", whatsapp_url, "')"),
-                     icon = icon("whatsapp"),
-                     class = "btn-success")
-      }
-    }
-  })
-  
-  output$tourism_gallery <- renderUI({
-    spots <- dbGetQuery(db, "SELECT * FROM Tourism")
-    
-    fluidRow(
-      lapply(1:nrow(spots), function(i) {
-        box(
-          width = 3,
-          title = spots$name[i],
-          tags$img(src = spots$image_url[i], width = "100%"),
-          p(spots$description[i]),
-          leafletOutput(paste0("mini_map_", i), height = 200)
-        )
-      })
-    )
-  })
-  
-  observe({
-    spots <- dbGetQuery(db, "SELECT * FROM Tourism")
-    for (i in 1:nrow(spots)) {
-      local({
-        idx <- i
-        output[[paste0("mini_map_", idx)]] <- renderLeaflet({
-          leaflet() %>%
-            addTiles() %>%
-            addMarkers(lng = spots$longitude[idx], lat = spots$latitude[idx])
-        })
-      })
-    }
-  })
-  
-  output$binga_map <- renderLeaflet({
-    spots <- dbGetQuery(db, "SELECT * FROM Tourism")
-    fish_locations <- dbGetQuery(db, "
-      SELECT f.id, f.fish_type, f.price_usd, u.username, f.location 
-      FROM Fish f
-      JOIN Users u ON f.user_id = u.id
-    ")
-    
-    leaflet() %>%
-      addTiles() %>%
-      addMarkers(
-        data = spots,
-        lng = ~longitude,
-        lat = ~latitude,
-        popup = ~paste0("<b>", name, "</b><br>", description)
-      ) %>%
-      addCircleMarkers(
-        data = fish_locations,
-        lng = 27.34,  # Binga approximate longitude
-        lat = -17.62, # Binga approximate latitude
-        radius = 5,
-        color = "blue",
-        popup = ~paste0("<b>", fish_type, "</b><br>Price: $", price_usd, "<br>Seller: ", username)
-      )
-  })
-  
-  output$total_fishermen <- renderValueBox({
-    count <- dbGetQuery(db, "SELECT COUNT(*) as count FROM Users WHERE is_fisherman = 1")$count
-    valueBox(count, "Registered Fishermen", icon = icon("users"), color = "blue")
-  })
-  
-  output$total_fish_listings <- renderValueBox({
-    count <- dbGetQuery(db, "SELECT COUNT(*) as count FROM Fish")$count
-    valueBox(count, "Fish Listings", icon = icon("fish"), color = "green")
-  })
-  
-  output$tourism_spots <- renderValueBox({
-    count <- dbGetQuery(db, "SELECT COUNT(*) as count FROM Tourism")$count
-    valueBox(count, "Tourism Spots", icon = icon("umbrella-beach"), color = "yellow")
-  })
-  
-  output$recent_fish <- renderDT({
-    fish_data <- dbGetQuery(db, "
-      SELECT f.id, f.fish_type, f.weight_kg, f.price_usd, f.preservation, u.username 
-      FROM Fish f
-      JOIN Users u ON f.user_id = u.id
-      ORDER BY f.upload_time DESC
-      LIMIT 10
-    ")
-    
-    datatable(fish_data, options = list(pageLength = 5))
-  })
-}
-
-# Run the application
+        <div class="content-wrapper">
+            <section class="content-header">
+                <h1>Binga Fish & Tourism</h1>
+            </section>
+            <section class="content">
+                <div id="app-content">
+                    <p>Welcome to the Binga Fish & Tourism App!</p>
+                    <p>To access the Shiny application, visit the link below:</p>
+                    <a href="https://your-shiny-app-url" class="btn btn-primary">Open Shiny App</a>
+                </div>
+            </section>
+        </div>
+    </div>
+</body>
+</html>
